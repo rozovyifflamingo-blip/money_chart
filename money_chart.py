@@ -6,9 +6,9 @@ from PIL import Image, ImageDraw
 # --- НАСТРОЙКИ ---
 # Мы будем искать любой файл, начинающийся на "bill" (bill.png, bill.jpg и т.д.)
 SEARCH_PATTERN = "bill.*" 
-BILL_WIDTH = 150
-BILL_HEIGHT = 20
-VERTICAL_STEP = 12
+BILL_WIDTH = 140           # Ширина чуть меньше, чтобы было компактнее
+BILL_HEIGHT = 5            # <--- ВАЖНО: Делаем купюру ОЧЕНЬ тонкой (сплющиваем твою картинку)
+VERTICAL_STEP = 4
 # -----------------
 
 def find_and_load_texture():
@@ -70,19 +70,27 @@ def generate_chart(numbers, output_filename="result.png"):
     draw = ImageDraw.Draw(canvas)
     
     current_x = 60
-    for count in numbers:
-        base_y = canvas_height - 60
-        draw.text((current_x + b_w//2 - 5, base_y + 20), str(count), fill="black")
-        
-        for i in range(count):
+   for i in range(count):
             y = base_y - (i * VERTICAL_STEP)
-            offset_x = random.randint(-2, 2)
+            
+            # Рандомизация (чуть меньше, чтобы стопка была аккуратнее)
+            offset_x = random.randint(-1, 1) 
+            
+            # Рисуем купюру
             canvas.paste(banknote, (current_x + offset_x, y), banknote)
             
-            # Тень для реализма
-            if i < count - 1:
-                shadow = Image.new('RGBA', (b_w, b_h), (0, 0, 0, int(40 * (1 - i/count))))
-                # canvas.paste(shadow, (current_x + offset_x, y), shadow)
+            # --- ДОБАВЛЯЕМ ТЕНЬ ---
+            # Это затемняет нижние купюры, создавая объем
+            # Мы рисуем черный прямоугольник с прозрачностью поверх каждой купюры
+            # Чем ниже купюра (меньше i), тем она темнее
+            if i < count - 1: # Верхнюю купюру не затемняем
+                # Сила тени зависит от высоты стопки.
+                # Альфа-канал (прозрачность) от 0 до 100.
+                opacity = int(40 * (1 - i / count)) 
+                if opacity > 0:
+                    shadow = Image.new('RGBA', (b_w, b_h), (0, 0, 0, opacity))
+                    # Важно: накладываем тень только на саму купюру
+                    canvas.paste(shadow, (current_x + offset_x, y), mask=banknote)
 
         current_x += b_w + 60
 
