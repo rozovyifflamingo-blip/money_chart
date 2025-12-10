@@ -3,108 +3,93 @@ import glob
 import random
 from PIL import Image, ImageDraw
 
-# --- НАСТРОЙКИ ДЛЯ РЕАЛИЗМА ---
-# Ищем любой файл, начинающийся на bill (png, jpg...)
+# --- НОВЫЕ НАСТРОЙКИ ПОД ТВОЕ ФОТО ---
 SEARCH_PATTERN = "bill.*" 
 
-# Делаем купюру тонкой и широкой, как реальный торец пачки
-BILL_WIDTH = 140           
-BILL_HEIGHT = 5            # Высота 5 пикселей (сплющиваем картинку)
-VERTICAL_STEP = 4          # Шаг 4 пикселя (плотная укладка)
+# Мы НЕ сжимаем картинку до 5px, иначе будет серая каша.
+# Мы оставляем её достаточно крупной, чтобы была видна текстура.
+BILL_WIDTH = 130           
+BILL_HEIGHT = 25           # Высота картинки (достаточная для деталей)
+
+# Но шаг делаем МАЛЕНЬКИМ. 
+# Это значит, что каждая следующая купюра перекроет 80% предыдущей.
+# Останется виден только "краешек" в 5 пикселей.
+VERTICAL_STEP = 5          
 # ------------------------------
 
 def find_and_load_texture():
-    """Ищет файл текстуры и загружает его."""
     all_files = os.listdir('.')
-    # Ищем файлы по шаблону bill.*
     found_files = glob.glob(SEARCH_PATTERN)
     
     if not found_files:
-        # Пробуем без учета регистра
+        # Ищем без учета регистра
         found_files = [f for f in all_files if f.lower().startswith('bill.')]
 
     if not found_files:
-        print("❌ ОШИБКА: Файл 'bill.png' (или jpg) не найден!")
+        print("❌ ОШИБКА: Файл 'bill.png' не найден!")
         return None
 
     texture_path = found_files[0]
-    print(f"✅ Использую текстуру: {texture_path}")
+    print(f"✅ Текстура найдена: {texture_path}")
 
     try:
         img = Image.open(texture_path).convert("RGBA")
-        # Сплющиваем изображение до размера торца купюры
+        # Масштабируем до наших размеров
         img = img.resize((BILL_WIDTH, BILL_HEIGHT))
         return img
     except Exception as e:
-        print(f"❌ ОШИБКА картинки: {e}")
+        print(f"❌ ОШИБКА: {e}")
         return None
-
-def create_fallback_texture():
-    """Рисует заглушку, если картинки нет."""
-    img = Image.new('RGBA', (BILL_WIDTH, BILL_HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.rectangle([0, 0, BILL_WIDTH, BILL_HEIGHT], fill=(85, 120, 85), outline=(50, 80, 50))
-    return img
 
 def generate_chart(numbers, output_filename="result.png"):
     banknote = find_and_load_texture()
     
     if banknote is None:
-        banknote = create_fallback_texture()
+        print("Стоп. Нет картинки - нет графика.")
+        return
 
     b_w, b_h = banknote.size
     max_bills = max(numbers) if numbers else 0
     num_stacks = len(numbers)
     
-    # Размер холста
-    canvas_width = num_stacks * (b_w + 60) + 60
-    canvas_height = (max_bills * VERTICAL_STEP) + b_h + 100
+    # Расчет холста
+    canvas_width = num_stacks * (b_w + 50) + 50
+    canvas_height = (max_bills * VERTICAL_STEP) + b_h + 80
     
-    # Создаем фон
+    # Белый фон
     canvas = Image.new('RGBA', (canvas_width, canvas_height), (255, 255, 255, 255))
     draw = ImageDraw.Draw(canvas)
     
-    current_x = 60
+    current_x = 50
     
-    # --- ГЛАВНЫЙ ЦИКЛ ---
     for count in numbers:
-        base_y = canvas_height - 60
+        base_y = canvas_height - 50
         
-        # Подпись числа
-        draw.text((current_x + b_w//2 - 10, base_y + 15), str(count), fill="black")
+        # Подпись
+        draw.text((current_x + b_w//2 - 10, base_y + 10), str(count), fill="black")
         
         for i in range(count):
-            # Считаем координату Y
+            # Координата Y
             y = base_y - (i * VERTICAL_STEP)
             
-            # Небольшой рандом влево-вправо
+            # Легкий "джиттер" (сдвиг), чтобы стопка не была идеальной
             offset_x = random.randint(-1, 1)
             
-            # Рисуем саму купюру
-            canvas.paste(banknote, (current_x + offset_x, y), banknote)
+            # Рисуем купюру
+            canvas.paste(banknote, (current_x + offset_x, y), mask=banknote)
             
-            # --- ТЕНЬ (для объема) ---
-            # Чем ниже купюра в стопке, тем темнее она накрывается тенью
-            if i < count - 1: 
-                # Рассчитываем прозрачность тени (чем ниже, тем темнее)
-                # Максимальная тень = 60 из 255
-                opacity = int(60 * (1 - i / count)) 
-                
-                if opacity > 0:
-                    shadow = Image.new('RGBA', (b_w, b_h), (0, 0, 0, opacity))
-                    # Накладываем тень только на форму купюры (mask=banknote)
-                    canvas.paste(shadow, (current_x + offset_x, y), mask=banknote)
-
-        current_x += b_w + 60
+            # ТЕНЬ НЕ НУЖНА, так как у твоего фото есть свои тени и детали.
+            # Если включить программную тень, картинка станет грязной.
+            
+        current_x += b_w + 50
 
     canvas.save(output_filename)
-    print(f"🎉 Готово! Файл сохранен как {output_filename}")
+    print(f"🎉 Готово! Файл: {output_filename}")
 
 if __name__ == "__main__":
-    print("Генератор денежных диаграмм запущен.")
-    user_input = input("Введи числа через пробел (например: 100 50 250): ")
+    user_input = input("Введи числа (например: 10 30 15): ")
     try:
         data = [int(x) for x in user_input.split()]
         generate_chart(data)
     except ValueError:
-        print("Ошибка: нужно вводить только числа!")
+        print("Только числа!")
