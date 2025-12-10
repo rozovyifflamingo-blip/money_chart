@@ -1,92 +1,94 @@
+import os
 import random
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-def create_banknote_asset():
+# --- НАСТРОЙКИ ---
+TEXTURE_FILE = "bill.png"  # Имя твоего файла с текстурой
+BILL_WIDTH = 150           # Ширина купюры на графике (в пикселях)
+BILL_HEIGHT = 20           # Высота одной купюры (толщина)
+VERTICAL_STEP = 12         # Насколько плотно лежат купюры (меньше высоты = перекрытие)
+# -----------------
+
+def get_banknote_image():
     """
-    Создает маленькое изображение одной купюры (вид сбоку/с торца).
-    Генерируем его кодом, чтобы не зависеть от внешних файлов.
+    Пытается загрузить картинку. Если её нет — рисует 'заглушку'.
     """
-    width = 120
-    height = 15
-    # Цвет купюры (зеленоватый)
-    color = (133, 187, 101)
-    border_color = (80, 120, 60)
+    if os.path.exists(TEXTURE_FILE):
+        try:
+            img = Image.open(TEXTURE_FILE).convert("RGBA")
+            # Масштабируем картинку под наши настройки, чтобы все было ровно
+            img = img.resize((BILL_WIDTH, BILL_HEIGHT))
+            return img
+        except Exception as e:
+            print(f"Ошибка при чтении картинки: {e}")
     
-    img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    print("Текстура не найдена! Рисую запасной вариант...")
+    # ЗАПАСНОЙ ВАРИАНТ (если ты забыл положить bill.png)
+    img = Image.new('RGBA', (BILL_WIDTH, BILL_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    
-    # Рисуем прямоугольник (тело купюры)
-    draw.rectangle([0, 0, width-1, height-1], fill=color, outline=border_color)
-    
-    # Добавляем немного "шума" или деталей, чтобы было похоже на текстуру бумаги
-    draw.line([10, 7, 110, 7], fill=border_color, width=1)
-    draw.text((5, 2), "$", fill=(50, 90, 40))
-    draw.text((width-15, 2), "$", fill=(50, 90, 40))
-    
+    draw.rectangle([0, 0, BILL_WIDTH, BILL_HEIGHT], fill=(50, 100, 50), outline=(30, 60, 30))
+    draw.line([5, 5, BILL_WIDTH-5, 5], fill=(100, 150, 100), width=2)
     return img
 
-def generate_money_chart(numbers, output_filename="money_chart.png"):
-    """
-    Строит диаграмму из стопок купюр.
-    numbers: список чисел (высота стопок)
-    """
-    banknote = create_banknote_asset()
+def generate_realistic_chart(numbers, output_filename="result.png"):
+    banknote = get_banknote_image()
     b_w, b_h = banknote.size
     
-    # Настройки отображения
-    # Сдвиг каждой следующей купюры по вертикали (меньше высоты, чтобы было плотно)
-    vertical_step = 8 
-    
-    # Определяем размер холста
     max_bills = max(numbers) if numbers else 0
     num_stacks = len(numbers)
     
-    # Ширина холста: количество стопок * (ширина купюры + отступ)
-    canvas_width = num_stacks * (b_w + 50) + 50
-    # Высота холста: макс. кол-во купюр * шаг + запас
-    canvas_height = max_bills * vertical_step + b_h + 100
+    # Считаем размер холста
+    canvas_width = num_stacks * (b_w + 60) + 60
+    # Высота: кол-во купюр * шаг + место под текст
+    canvas_height = (max_bills * VERTICAL_STEP) + b_h + 100
     
-    # Создаем белый фон
-    canvas = Image.new('RGBA', (canvas_width, canvas_height), (255, 255, 255, 255))
+    # Прозрачный или белый фон
+    bg_color = (255, 255, 255, 255) # Белый
+    canvas = Image.new('RGBA', (canvas_width, canvas_height), bg_color)
     draw = ImageDraw.Draw(canvas)
     
-    # Рисуем стопки
-    current_x = 50 # Начальный отступ слева
+    current_x = 60
     
     for count in numbers:
-        # Рисуем снизу вверх
-        base_y = canvas_height - 50 # Отступ снизу
+        # Координата Y для самой нижней купюры
+        base_y = canvas_height - 60
         
-        # Подписываем цифру под стопкой
-        draw.text((current_x + b_w//2 - 10, base_y + 10), str(count), fill="black")
+        # Подпись числа
+        text = str(count)
+        # Примерное центрирование текста (упрощено, т.к. без загрузки шрифтов ширина неизвестна)
+        draw.text((current_x + b_w//2 - 5, base_y + 20), text, fill="black")
         
-        # Цикл укладки купюр
-        for i in range(int(count)):
-            # Вычисляем Y (чем больше i, тем выше)
-            y = base_y - (i * vertical_step)
+        for i in range(count):
+            # Считаем координату Y (снизу вверх)
+            y = base_y - (i * VERTICAL_STEP)
             
-            # Добавляем случайный сдвиг влево-вправо для реализма ("небрежная стопка")
-            random_offset = random.randint(-2, 2)
+            # Рандомизация:
+            # 1. Сдвиг влево-вправо (чтобы стопка была не идеальной)
+            offset_x = random.randint(-2, 2)
             
-            # Накладываем купюру
-            canvas.paste(banknote, (current_x + random_offset, y), banknote)
+            # 2. Небольшой поворот (опционально, требует качественной картинки с прозрачными краями)
+            # Если края картинки обрезаны жестко, поворот лучше убрать
+            # rotated_bill = banknote.rotate(random.randint(-1, 1), expand=True)
             
-        current_x += b_w + 50 # Сдвигаем X для следующей стопки
-        
-    # Сохраняем
-    canvas.save(output_filename)
-    print(f"Готово! Диаграмма сохранена как {output_filename}")
+            # Вставляем купюру
+            # paste работает так: (картинка, координаты, маска прозрачности)
+            canvas.paste(banknote, (current_x + offset_x, y), banknote)
+            
+            # Затемнение нижних купюр (для объема)
+            # Это продвинутая техника: рисуем полупрозрачный черный слой поверх нижних
+            if i < count - 1:
+                shadow = Image.new('RGBA', (b_w, b_h), (0, 0, 0, int(30 * (1 - i/count))))
+                # canvas.paste(shadow, (current_x + offset_x, y), shadow) # Раскомментируй для теней
 
-# --- ЗАПУСК ---
+        current_x += b_w + 60
+
+    canvas.save(output_filename)
+    print(f"Готово! Сохранено в {output_filename}")
+
 if __name__ == "__main__":
-    # Введи сюда свои цифры
-    user_input = input("Введите числа через пробел (например: 10 25 5 15): ")
-    
+    user_input = input("Введи числа (например 10 50 20): ")
     try:
         data = [int(x) for x in user_input.split()]
-        if not data:
-            print("Вы не ввели цифры.")
-        else:
-            generate_money_chart(data)
+        generate_realistic_chart(data)
     except ValueError:
-        print("Ошибка: вводите только целые числа.")
+        print("Нужны только числа!")
